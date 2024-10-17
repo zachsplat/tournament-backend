@@ -16,10 +16,20 @@ Ticket.init(
     profile_id: {
       type: DataTypes.INTEGER,
       allowNull: false,
+      references: {
+        model: Profile,
+        key: 'profile_id',
+      },
+      onDelete: 'CASCADE',
     },
     tournament_id: {
       type: DataTypes.INTEGER,
       allowNull: false,
+      references: {
+        model: Tournament,
+        key: 'tournament_id',
+      },
+      onDelete: 'CASCADE',
     },
     qr_code: {
       type: DataTypes.TEXT,
@@ -42,7 +52,9 @@ Ticket.init(
   {
     sequelize,
     modelName: 'Ticket',
-    timestamps: false,
+    timestamps: true,
+    underscored: true,
+    tableName: 'tickets',
   }
 );
 
@@ -54,3 +66,4 @@ Ticket.belongsTo(Tournament, { foreignKey: 'tournament_id' });
 Tournament.hasMany(Ticket, { foreignKey: 'tournament_id' });
 
 module.exports = Ticket;
+

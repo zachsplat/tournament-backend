@@ -1,10 +1,10 @@
 // controllers/tournamentController.js
-const { Tournament, Ticket } = require('../models'); // Ensure you import Ticket model
+const { Tournament, Ticket } = require('../models');
 const { validationResult } = require('express-validator');
 const { Op } = require('sequelize');
 
 // List tournaments with pagination and filtering
-exports.listTournaments = async (req, res) => {
+exports.listTournaments = async (req, res, next) => {
   try {
     const { page = 1, limit = 10, search, date, location } = req.query;
     const offset = (page - 1) * limit;
@@ -30,7 +30,8 @@ exports.listTournaments = async (req, res) => {
     });
 
     res.status(200).json({
-      tournaments,
+      success: true,
+      data: tournaments,
       pagination: {
         total: count,
         page: parseInt(page),
@@ -39,7 +40,7 @@ exports.listTournaments = async (req, res) => {
     });
   } catch (error) {
     console.error('List Tournaments Error:', error);
-    res.status(500).json({ error: 'Internal server error.' });
+    next(error);
   }
 };
 
@@ -47,10 +48,23 @@ exports.listTournaments = async (req, res) => {
 exports.getTournamentDetails = async (req, res) => {
   try {
     const tournament = await Tournament.findByPk(req.params.id);
+
     if (!tournament) {
       return res.status(404).json({ error: 'Tournament not found.' });
     }
-    res.status(200).json(tournament);
+
+    // Get the number of sold tickets
+    const soldTicketsCount = await Ticket.count({
+      where: { tournament_id: tournament.tournament_id },
+    });
+
+    // Prepare the response data
+    const responseData = {
+      ...tournament.toJSON(),
+      sold_tickets: soldTicketsCount,
+    };
+
+    res.status(200).json({ data: responseData });
   } catch (error) {
     console.error('Get Tournament Details Error:', error);
     res.status(500).json({ error: 'Internal server error.' });
@@ -58,8 +72,9 @@ exports.getTournamentDetails = async (req, res) => {
 };
 
 // Create tournament
-exports.createTournament = async (req, res) => {
+exports.createTournament = async (req, res, next) => {
   try {
+    // Validate input
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({ errors: errors.array() });
@@ -68,18 +83,30 @@ exports.createTournament = async (req, res) => {
     const { name, description, date, location, max_tickets, price } = req.body;
 
     // Create tournament
-    const tournament = await Tournament.create({ name, description, date, location, max_tickets, price });
+    const tournament = await Tournament.create({
+      name,
+      description,
+      date,
+      location,
+      max_tickets,
+      price,
+    });
 
-    res.status(201).json({ tournament_id: tournament.tournament_id, message: 'Tournament created successfully.' });
+    res.status(201).json({
+      success: true,
+      data: { tournament_id: tournament.tournament_id },
+      message: 'Tournament created successfully.',
+    });
   } catch (error) {
     console.error('Create Tournament Error:', error);
-    res.status(500).json({ error: 'Internal server error.' });
+    next(error);
   }
 };
 
 // Update tournament
-exports.updateTournament = async (req, res) => {
+exports.updateTournament = async (req, res, next) => {
   try {
+    // Validate input
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({ errors: errors.array() });
@@ -94,24 +121,28 @@ exports.updateTournament = async (req, res) => {
     }
 
     // Update tournament fields
-    tournament.name = name || tournament.name;
-    tournament.description = description || tournament.description;
-    tournament.date = date || tournament.date;
-    tournament.location = location || tournament.location;
-    tournament.max_tickets = max_tickets || tournament.max_tickets;
-    tournament.price = price !== undefined ? price : tournament.price;
+    if (name) tournament.name = name;
+    if (description) tournament.description = description;
+    if (date) tournament.date = date;
+    if (location) tournament.location = location;
+    if (max_tickets !== undefined) tournament.max_tickets = max_tickets;
+    if (price !== undefined) tournament.price = price;
 
     await tournament.save();
 
-    res.status(200).json({ message: 'Tournament updated successfully.', tournament });
+    res.status(200).json({
+      success: true,
+      message: 'Tournament updated successfully.',
+      data: tournament,
+    });
   } catch (error) {
     console.error('Update Tournament Error:', error);
-    res.status(500).json({ error: 'Internal server error.' });
+    next(error);
   }
 };
 
 // Delete tournament
-exports.deleteTournament = async (req, res) => {
+exports.deleteTournament = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -128,10 +159,10 @@ exports.deleteTournament = async (req, res) => {
 
     await tournament.destroy();
 
-    res.status(200).json({ message: 'Tournament deleted successfully.' });
+    res.status(200).json({ success: true, message: 'Tournament deleted successfully.' });
   } catch (error) {
     console.error('Delete Tournament Error:', error);
-    res.status(500).json({ error: 'Internal server error.' });
+    next(error);
   }
 };
 

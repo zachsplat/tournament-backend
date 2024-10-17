@@ -2,7 +2,6 @@
 const { Sequelize } = require('sequelize');
 
 const env = process.env.NODE_ENV || 'development';
-
 let sequelize;
 
 if (env === 'development') {
@@ -10,8 +9,8 @@ if (env === 'development') {
     dialect: 'postgres',
   });
 } else if (env === 'test') {
-  sequelize = new Sequelize('sqlite::memory:', {
-    dialect: 'sqlite',
+  sequelize = new Sequelize(process.env.TEST_DATABASE_URL, {
+    dialect: 'postgres',
     logging: false,
   });
 } else {

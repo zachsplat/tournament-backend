@@ -15,6 +15,11 @@ Profile.init(
     user_id: {
       type: DataTypes.INTEGER,
       allowNull: false,
+      references: {
+        model: User,
+        key: 'user_id',
+      },
+      onDelete: 'CASCADE',
     },
     name: {
       type: DataTypes.STRING,
@@ -32,7 +37,9 @@ Profile.init(
   {
     sequelize,
     modelName: 'Profile',
-    timestamps: false,
+    timestamps: true,
+    underscored: true,
+    tableName: 'profiles',
   }
 );
 

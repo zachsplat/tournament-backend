@@ -6,9 +6,9 @@ const { authenticateToken } = require('../middleware/auth');
 const { isAdmin } = require('../middleware/authorize');
 const { body } = require('express-validator');
 
-// Scan QR Code (Admin Only)
+// Check-in Participant by Scanning QR Code (Admin Only)
 router.post(
-  '/scan-qr',
+  '/',
   authenticateToken,
   isAdmin,
   [
@@ -18,3 +18,4 @@ router.post(
 );
 
 module.exports = router;
+

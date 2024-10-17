@@ -1,20 +1,24 @@
-// routes/bracketRoutes.js
-
+// routes/adminBracketRoutes.js
 const express = require('express');
 const router = express.Router();
 const bracketController = require('../controllers/bracketController');
 const { authenticateToken } = require('../middleware/auth');
 const { isAdmin } = require('../middleware/authorize');
 
-// Get Bracket by Tournament ID
-router.get('/tournament/:tournamentId', bracketController.getBracketByTournamentId);
-
-// Generate Bracket (Admin Only)
+// POST /api/admin/tournaments/:id/bracket - Generate Bracket for a Tournament
 router.post(
-  '/tournament/:tournamentId/generate',
+  '/tournaments/:id/bracket',
   authenticateToken,
   isAdmin,
   bracketController.generateBracket
+);
+
+// GET /api/admin/brackets - Get All Brackets
+router.get(
+  '/brackets',
+  authenticateToken,
+  isAdmin,
+  bracketController.getAllBrackets
 );
 
 module.exports = router;

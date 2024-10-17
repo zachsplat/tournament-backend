@@ -1,5 +1,4 @@
 // controllers/ticketController.js
-
 const { Ticket, Profile, Tournament, sequelize } = require('../models');
 const { validationResult } = require('express-validator');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
@@ -11,45 +10,42 @@ const { Op } = require('sequelize');
  * Purchase a ticket for a tournament.
  * This method handles ticket purchasing with concurrency control to prevent overselling.
  */
-exports.purchaseTicket = async (req, res, next) => {
-  // Start a new transaction
+exports.purchaseTicket = async (req, res) => {
   const transaction = await sequelize.transaction();
   try {
-    // 1. Validate Input
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      // If validation fails, rollback the transaction and return errors
       await transaction.rollback();
-      return res.status(400).json({ success: false, errors: errors.array() });
+      return res.status(400).json({ errors: errors.array() });
     }
 
-    const { tournament_id, payment_token } = req.body;
+    const { tournament_id, payment_method_id } = req.body;
     const profileId = req.params.profileId;
 
-    // 2. Verify Profile Ownership
+    // Verify Profile Ownership
     const profile = await Profile.findOne({
       where: { profile_id: profileId, user_id: req.user.user_id },
       transaction,
-      lock: transaction.LOCK.UPDATE, // Optional: Lock the profile row if needed
+      lock: transaction.LOCK.UPDATE,
     });
 
     if (!profile) {
       await transaction.rollback();
-      return res.status(403).json({ success: false, error: 'Unauthorized access to the specified profile.' });
+      return res.status(403).json({ error: 'Unauthorized access to the specified profile.' });
     }
 
-    // 3. Fetch Tournament with Row-Level Lock
+    // Fetch Tournament with Row-Level Lock
     const tournament = await Tournament.findByPk(tournament_id, {
       transaction,
-      lock: transaction.LOCK.UPDATE, // Locks the row for this transaction
+      lock: transaction.LOCK.UPDATE,
     });
 
     if (!tournament) {
       await transaction.rollback();
-      return res.status(404).json({ success: false, error: 'Tournament not found.' });
+      return res.status(404).json({ error: 'Tournament not found.' });
     }
 
-    // 4. Check Ticket Availability
+    // Check Ticket Availability
     const ticketCount = await Ticket.count({
       where: { tournament_id: tournament.tournament_id },
       transaction,
@@ -57,85 +53,61 @@ exports.purchaseTicket = async (req, res, next) => {
 
     if (ticketCount >= tournament.max_tickets) {
       await transaction.rollback();
-      return res.status(400).json({ success: false, error: 'Tickets are sold out for this tournament.' });
+      return res.status(400).json({ error: 'Tickets are sold out for this tournament.' });
     }
 
-    // 5. Process Payment with Stripe
+    // Create Payment Intent
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: tournament.price * 100, // Amount in cents
+      amount: tournament.price * 100,
       currency: 'usd',
-      payment_method: payment_token,
-      confirm: true, // Automatically confirms the payment
+      payment_method: payment_method_id,
+      confirm: true,
     });
 
-    if (paymentIntent.status !== 'succeeded') {
-      await transaction.rollback();
-      return res.status(402).json({ success: false, error: 'Payment processing failed. Please try again.' });
-    }
-
-    // 6. Create Ticket Record
+    // Create Ticket Record
     const ticket = await Ticket.create(
       {
         profile_id: profile.profile_id,
         tournament_id: tournament.tournament_id,
-        qr_code: '', // Placeholder; will be updated after QR code generation
+        qr_code: '', // Placeholder
         status: 'purchased',
         purchase_date: new Date(),
-        payment_intent_id: paymentIntent.id, // Store Stripe Payment Intent ID for refunds
+        payment_intent_id: paymentIntent.id,
       },
       { transaction }
     );
 
-    // 7. Generate QR Code Data
+    // Generate QR Code Data
     const qrDataObj = {
       ticket_id: ticket.ticket_id,
-      // Only minimal data is encoded to reduce QR code size and exposure
       signature: crypto
         .createHmac('sha256', process.env.QR_SECRET)
         .update(`${ticket.ticket_id}`)
         .digest('hex'),
     };
 
-    // Encode minimal data to reduce QR code size
     const qrData = Buffer.from(JSON.stringify(qrDataObj)).toString('base64');
 
-    // 8. Update Ticket with QR Code Data
+    // Update Ticket with QR Code Data
     ticket.qr_code = qrData;
     await ticket.save({ transaction });
 
-    // 9. Generate QR Code Image (Data URL)
-    const qrCodeImage = await QRCode.toDataURL(qrData);
-
-    // 10. Commit the Transaction
+    // Commit the Transaction
     await transaction.commit();
 
-    // 11. Send Response to User
     res.status(201).json({
       success: true,
+      message: 'Ticket purchased successfully.',
       data: {
         ticket_id: ticket.ticket_id,
-        qr_code: qrCodeImage,
-        message: 'Ticket purchased successfully.',
       },
     });
   } catch (error) {
-    // If any error occurs, rollback the transaction
     await transaction.rollback();
-
     console.error('Purchase Ticket Error:', error);
-
-    // Handle specific Stripe errors
-    if (error.type === 'StripeCardError') {
-      return res.status(402).json({ success: false, error: 'Your card was declined. Please try another payment method.' });
-    }
-
-    // Handle other known errors if necessary
-
-    // For unexpected errors, return a generic message
-    res.status(500).json({ success: false, error: 'An unexpected error occurred. Please try again later.' });
+    res.status(500).json({ error: 'An unexpected error occurred. Please try again later.' });
   }
 };
-
 /**
  * Get all tickets for a user's profile with pagination and filtering.
  */
@@ -147,9 +119,12 @@ exports.getUserTickets = async (req, res, next) => {
     const profileId = req.params.profileId;
 
     // Verify profile belongs to user
-    const profile = await Profile.findOne({ where: { profile_id: profileId, user_id: req.user.user_id } });
+    const profile = await Profile.findOne({
+      where: { profile_id: profileId, user_id: req.user.user_id },
+    });
+
     if (!profile) {
-      return res.status(403).json({ success: false, error: 'Unauthorized access to the specified profile.' });
+      return res.status(403).json({ error: 'Unauthorized access to the specified profile.' });
     }
 
     const where = { profile_id: profile.profile_id };
@@ -181,7 +156,7 @@ exports.getUserTickets = async (req, res, next) => {
     });
   } catch (error) {
     console.error('Get User Tickets Error:', error);
-    res.status(500).json({ success: false, error: 'Internal server error.' });
+    next(error);
   }
 };
 
@@ -193,9 +168,12 @@ exports.getTicketById = async (req, res, next) => {
     const { profileId, ticketId } = req.params;
 
     // Verify profile belongs to user
-    const profile = await Profile.findOne({ where: { profile_id: profileId, user_id: req.user.user_id } });
+    const profile = await Profile.findOne({
+      where: { profile_id: profileId, user_id: req.user.user_id },
+    });
+
     if (!profile) {
-      return res.status(403).json({ success: false, error: 'Unauthorized access to the specified profile.' });
+      return res.status(403).json({ error: 'Unauthorized access to the specified profile.' });
     }
 
     const ticket = await Ticket.findOne({
@@ -204,13 +182,13 @@ exports.getTicketById = async (req, res, next) => {
     });
 
     if (!ticket) {
-      return res.status(404).json({ success: false, error: 'Ticket not found.' });
+      return res.status(404).json({ error: 'Ticket not found.' });
     }
 
     res.status(200).json({ success: true, data: ticket });
   } catch (error) {
     console.error('Get Ticket By ID Error:', error);
-    res.status(500).json({ success: false, error: 'Internal server error.' });
+    next(error);
   }
 };
 
@@ -222,18 +200,21 @@ exports.cancelTicket = async (req, res, next) => {
     const { profileId, ticketId } = req.params;
 
     // Verify profile belongs to user
-    const profile = await Profile.findOne({ where: { profile_id: profileId, user_id: req.user.user_id } });
+    const profile = await Profile.findOne({
+      where: { profile_id: profileId, user_id: req.user.user_id },
+    });
+
     if (!profile) {
-      return res.status(403).json({ success: false, error: 'Unauthorized access to the specified profile.' });
+      return res.status(403).json({ error: 'Unauthorized access to the specified profile.' });
     }
 
     const ticket = await Ticket.findOne({ where: { ticket_id: ticketId, profile_id: profile.profile_id } });
     if (!ticket) {
-      return res.status(404).json({ success: false, error: 'Ticket not found.' });
+      return res.status(404).json({ error: 'Ticket not found.' });
     }
 
     if (ticket.status !== 'purchased') {
-      return res.status(400).json({ success: false, error: 'Only purchased tickets can be canceled.' });
+      return res.status(400).json({ error: 'Only purchased tickets can be canceled.' });
     }
 
     // Process refund via Stripe
@@ -242,7 +223,7 @@ exports.cancelTicket = async (req, res, next) => {
     });
 
     if (refund.status !== 'succeeded') {
-      return res.status(500).json({ success: false, error: 'Refund failed. Please contact support.' });
+      return res.status(500).json({ error: 'Refund failed. Please contact support.' });
     }
 
     // Update ticket status
@@ -255,10 +236,10 @@ exports.cancelTicket = async (req, res, next) => {
 
     // Handle specific Stripe errors
     if (error.type === 'StripeInvalidRequestError') {
-      return res.status(400).json({ success: false, error: 'Invalid refund request. Please check the ticket details.' });
+      return res.status(400).json({ error: 'Invalid refund request. Please check the ticket details.' });
     }
 
-    res.status(500).json({ success: false, error: 'An unexpected error occurred. Please try again later.' });
+    next(error);
   }
 };
 

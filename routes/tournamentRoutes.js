@@ -14,7 +14,7 @@ router.get('/:id', tournamentController.getTournamentDetails);
 
 // Create Tournament (Admin Only)
 router.post(
-  '/admin/tournaments',
+  '/',
   authenticateToken,
   isAdmin,
   [
@@ -23,7 +23,7 @@ router.post(
     body('date').isISO8601().withMessage('Date must be a valid ISO 8601 date.'),
     body('location').notEmpty().withMessage('Location is required.'),
     body('max_tickets').isInt({ min: 1 }).withMessage('Max tickets must be at least 1.'),
-    body('price').optional().isInt({ min: 0 }).withMessage('Price must be a non-negative integer.'),
+    body('price').isInt({ min: 0 }).withMessage('Price must be a non-negative integer.'),
   ],
   tournamentController.createTournament
 );
@@ -45,11 +45,7 @@ router.put(
 );
 
 // Delete Tournament (Admin Only)
-router.delete(
-  '/:id',
-  authenticateToken,
-  isAdmin,
-  tournamentController.deleteTournament
-);
+router.delete('/:id', authenticateToken, isAdmin, tournamentController.deleteTournament);
 
 module.exports = router;
+

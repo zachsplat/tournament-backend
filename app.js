@@ -4,14 +4,16 @@ const express = require('express');
 const app = express();
 const cors = require('cors');
 const { sequelize } = require('./models');
-const https = require('https');
-const fs = require('fs');
 const path = require('path');
+const helmet = require('helmet');
+const morgan = require('morgan');
 
-// Define allowed origins
-const allowedOrigins = ['http://localhost:3000', 'http://192.168.1.70:3000'];
+// Security Middleware
+app.use(helmet()); // Adds security headers
+app.use(morgan('combined')); // Logs HTTP requests
 
-// Configure CORS middleware
+// CORS Configuration
+const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3000'];
 app.use(cors({
   origin: function (origin, callback) {
     if (!origin || allowedOrigins.includes(origin)) {
@@ -24,6 +26,9 @@ app.use(cors({
 }));
 
 app.use(express.json());
+
+// Static Files
+app.use('/uploads/avatars', express.static(path.join(__dirname, 'uploads/avatars')));
 
 // Routes
 const authRoutes = require('./routes/authRoutes');
@@ -40,27 +45,12 @@ app.use('/api/profiles', profileRoutes);
 app.use('/api/tournaments', tournamentRoutes);
 app.use('/api/profiles/:profileId/tickets', ticketRoutes);
 app.use('/api/brackets', bracketRoutes);
-app.use('/api/admin', checkinRoutes);
-app.use('/api/admin', adminUserRoutes);
+app.use('/api/admin/checkin', checkinRoutes);
+app.use('/api/admin/users', adminUserRoutes);
 
-// HTTPS Configuration
-const SSL_PORT = process.env.SSL_PORT || 3001;
-const HTTP_PORT = process.env.HTTP_PORT || 3000;
-
-// Read SSL certificates
-const sslOptions = {
-  key: fs.readFileSync(path.join(__dirname, 'cert', 'key.pem')),
-  cert: fs.readFileSync(path.join(__dirname, 'cert', 'cert.pem')),
-};
-
-// Create HTTPS Server
-https.createServer(sslOptions, app).listen(SSL_PORT, () => {
-  console.log(`Secure server running on https://localhost:${SSL_PORT}`);
-});
-
-// Serve static files
-app.use('/uploads/avatars', express.static(path.join(__dirname, 'uploads/avatars')));
-
+// Error Handling Middleware
+const errorHandler = require('./middleware/errorHandler');
+app.use(errorHandler);
 
 // Sync Database
 sequelize.sync();

@@ -1,6 +1,7 @@
 // config/multer.js
 const multer = require('multer');
 const path = require('path');
+const crypto = require('crypto');
 
 // Storage configuration
 const storage = multer.diskStorage({
@@ -8,9 +9,9 @@ const storage = multer.diskStorage({
     cb(null, 'uploads/avatars/');
   },
   filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const uniqueSuffix = crypto.randomBytes(16).toString('hex');
     cb(null, uniqueSuffix + path.extname(file.originalname));
-  }
+  },
 });
 
 // File filter
@@ -20,7 +21,7 @@ const fileFilter = (req, file, cb) => {
   const mimetype = allowedTypes.test(file.mimetype);
 
   if (extname && mimetype) {
-    return cb(null, true);
+    cb(null, true);
   } else {
     cb(new Error('Only JPEG and PNG images are allowed.'));
   }

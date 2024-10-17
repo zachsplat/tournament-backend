@@ -1,9 +1,14 @@
 // controllers/bracketController.js
 const { Bracket, Tournament, Ticket, Profile } = require('../models');
+const { Op } = require('sequelize');
 
-exports.generateBracket = async (req, res, next) => {
+/**
+ * Generate a tournament bracket.
+ * This method pairs checked-in participants and creates a bracket.
+ */
+exports.generateBracket = async (req, res) => {
   try {
-    const tournamentId = req.params.id;
+    const tournamentId = req.params.tournamentId;
 
     // Find tournament
     const tournament = await Tournament.findByPk(tournamentId);
@@ -22,7 +27,7 @@ exports.generateBracket = async (req, res, next) => {
     }
 
     // Extract player profiles
-    const players = tickets.map(ticket => ticket.Profile);
+    const players = tickets.map((ticket) => ticket.Profile);
 
     // Generate bracket data
     const bracketData = generateBracketData(players);
@@ -44,31 +49,35 @@ exports.generateBracket = async (req, res, next) => {
     res.status(201).json({
       bracket_id: bracket.bracket_id,
       message: 'Bracket generated successfully.',
-      public_url: `http://${req.get('host')}/api/brackets/${bracket.bracket_id}`,
+      bracket_data: bracket.bracket_data,
     });
   } catch (error) {
     console.error('Generate Bracket Error:', error);
     res.status(500).json({ error: 'Internal server error.' });
   }
 };
-
-exports.getBracket = async (req, res, next) => {
+/**
+ * Get a tournament bracket by ID.
+ */
+exports.getBracketByTournamentId = async (req, res) => {
   try {
-    const bracketId = req.params.id;
+    const tournamentId = req.params.tournamentId;
 
-    const bracket = await Bracket.findByPk(bracketId);
+    const bracket = await Bracket.findOne({ where: { tournament_id: tournamentId } });
     if (!bracket) {
       return res.status(404).json({ error: 'Bracket not found.' });
     }
 
-    res.status(200).json(bracket);
+    res.status(200).json({ data: bracket });
   } catch (error) {
     console.error('Get Bracket Error:', error);
     res.status(500).json({ error: 'Internal server error.' });
   }
 };
 
-// Helper function to generate bracket data
+/**
+ * Helper function to generate bracket data.
+ */
 function generateBracketData(players) {
   // Shuffle players
   const shuffled = players.sort(() => 0.5 - Math.random());
@@ -93,11 +102,12 @@ function generateBracketData(players) {
   };
 
   // Generate subsequent rounds
-  let currentRound = 1;
-  while (matches.length > 1) {
-    currentRound += 1;
+  let currentMatches = matches;
+  let roundNumber = 1;
+  while (currentMatches.length > 1) {
+    roundNumber += 1;
     const nextRoundMatches = [];
-    for (let i = 0; i < matches.length; i += 2) {
+    for (let i = 0; i < currentMatches.length; i += 2) {
       nextRoundMatches.push({
         player1: null,
         player2: null,
@@ -105,11 +115,12 @@ function generateBracketData(players) {
       });
     }
     bracket.rounds.push({
-      round: currentRound,
+      round: roundNumber,
       matches: nextRoundMatches,
     });
-    matches = nextRoundMatches;
+    currentMatches = nextRoundMatches;
   }
 
   return bracket;
 }
+

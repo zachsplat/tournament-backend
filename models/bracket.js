@@ -15,16 +15,23 @@ Bracket.init(
     tournament_id: {
       type: DataTypes.INTEGER,
       allowNull: false,
+      references: {
+        model: Tournament,
+        key: 'tournament_id',
+      },
+      onDelete: 'CASCADE',
     },
     bracket_data: {
-      type: DataTypes.JSON,
+      type: DataTypes.JSONB,
       allowNull: false,
     },
   },
   {
     sequelize,
     modelName: 'Bracket',
-    timestamps: false,
+    timestamps: true,
+    underscored: true,
+    tableName: 'brackets',
   }
 );
 

@@ -12,25 +12,27 @@ exports.register = async (req, res, next) => {
       return res.status(400).json({ errors: errors.array() });
     }
 
+    const { email, password } = req.body;
+
     // Check if email already exists
-    const existingUser = await User.findOne({ where: { email: req.body.email } });
+    const existingUser = await User.findOne({ where: { email } });
     if (existingUser) {
       return res.status(409).json({ error: 'Email already exists.' });
     }
 
     // Hash password
-    const hashedPassword = await bcrypt.hash(req.body.password, 12);
+    const hashedPassword = await bcrypt.hash(password, 12);
 
     // Create user
     await User.create({
-      email: req.body.email,
+      email,
       password_hash: hashedPassword,
     });
 
     res.status(201).json({ message: 'User registered successfully.' });
   } catch (error) {
     console.error('Register Error:', error);
-    res.status(500).json({ error: 'Internal server error.' });
+    next(error); // Pass error to the error handler middleware
   }
 };
 
@@ -42,14 +44,16 @@ exports.login = async (req, res, next) => {
       return res.status(400).json({ errors: errors.array() });
     }
 
+    const { email, password } = req.body;
+
     // Find user
-    const user = await User.findOne({ where: { email: req.body.email } });
+    const user = await User.findOne({ where: { email } });
     if (!user) {
       return res.status(401).json({ error: 'Invalid credentials.' });
     }
 
     // Compare passwords
-    const isMatch = await bcrypt.compare(req.body.password, user.password_hash);
+    const isMatch = await bcrypt.compare(password, user.password_hash);
     if (!isMatch) {
       return res.status(401).json({ error: 'Invalid credentials.' });
     }
@@ -58,7 +62,7 @@ exports.login = async (req, res, next) => {
     const token = jwt.sign(
       { user_id: user.user_id, role: user.role },
       process.env.JWT_SECRET,
-      { expiresIn: '1h' }
+      { expiresIn: '8h' } // Extended token expiration
     );
 
     res.status(200).json({
@@ -71,6 +75,7 @@ exports.login = async (req, res, next) => {
     });
   } catch (error) {
     console.error('Login Error:', error);
-    res.status(500).json({ error: 'Internal server error.' });
+    next(error); // Pass error to the error handler middleware
   }
 };
+

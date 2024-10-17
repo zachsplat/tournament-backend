@@ -14,9 +14,15 @@ User.init(
     email: {
       type: DataTypes.STRING,
       allowNull: false,
-      unique: true,
+      unique: {
+        args: true,
+        msg: 'Email address already in use.',
+      },
       validate: {
-        isEmail: true,
+        isEmail: {
+          args: true,
+          msg: 'Email address must be valid.',
+        },
       },
     },
     password_hash: {
@@ -31,8 +37,11 @@ User.init(
   {
     sequelize,
     modelName: 'User',
-    timestamps: false,
+    timestamps: true,
+    underscored: true,
+    tableName: 'users',
   }
 );
 
 module.exports = User;
+

@@ -41,7 +41,7 @@ Tournament.init(
     price: {
       type: DataTypes.INTEGER,
       allowNull: false,
-      defaultValue: 50, // Assuming a default price
+      defaultValue: 50,
       validate: {
         min: 0,
         isInt: true,
@@ -51,8 +51,11 @@ Tournament.init(
   {
     sequelize,
     modelName: 'Tournament',
-    timestamps: false,
+    timestamps: true,
+    underscored: true,
+    tableName: 'tournaments',
   }
 );
 
 module.exports = Tournament;
+

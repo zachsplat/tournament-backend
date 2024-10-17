@@ -16,7 +16,7 @@ router.post(
   ticketController.purchaseTicket
 );
 
-// Get All Tickets for Profile
+// Get All Tickets for Profile with Pagination and Filtering
 router.get('/', authenticateToken, ticketController.getUserTickets);
 
 // Get Single Ticket by ID

@@ -10,3 +10,10 @@ node_modules/
 # Coverage reports
 coverage/
 
+# Logs
+logs/
+*.log
+
+# Other
+.DS_Store
+

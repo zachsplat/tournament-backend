@@ -1,7 +1,11 @@
 // controllers/checkinController.js
-const { Ticket } = require('../models');
+const { Ticket, Profile, Tournament } = require('../models');
 const crypto = require('crypto');
 
+/**
+ * Scan QR code to check in a participant.
+ * This method verifies the QR code and updates the ticket status to 'checked_in'.
+ */
 exports.scanQR = async (req, res, next) => {
   try {
     const { qr_data } = req.body;
@@ -10,7 +14,7 @@ exports.scanQR = async (req, res, next) => {
       return res.status(400).json({ error: 'QR data is required.' });
     }
 
-    // Decode QR data
+    // Decode and parse QR data
     let decodedData;
     try {
       decodedData = Buffer.from(qr_data, 'base64').toString('utf-8');
@@ -25,15 +29,16 @@ exports.scanQR = async (req, res, next) => {
       return res.status(400).json({ error: 'Malformed QR code data.' });
     }
 
-    const { ticket_id, profile_id, tournament_id, signature } = qrDataObj;
+    const { ticket_id, signature } = qrDataObj;
 
-    if (!ticket_id || !profile_id || !tournament_id || !signature) {
+    if (!ticket_id || !signature) {
       return res.status(400).json({ error: 'Incomplete QR code data.' });
     }
 
     // Verify signature
-    const expectedSignature = crypto.createHmac('sha256', process.env.QR_SECRET)
-      .update(`${ticket_id}${profile_id}${tournament_id}`)
+    const expectedSignature = crypto
+      .createHmac('sha256', process.env.QR_SECRET)
+      .update(`${ticket_id}`)
       .digest('hex');
 
     if (signature !== expectedSignature) {
@@ -42,11 +47,17 @@ exports.scanQR = async (req, res, next) => {
 
     // Find ticket
     const ticket = await Ticket.findOne({
-      where: {
-        ticket_id,
-        profile_id,
-        tournament_id,
-      },
+      where: { ticket_id },
+      include: [
+        {
+          model: Profile,
+          attributes: ['profile_id', 'name'],
+        },
+        {
+          model: Tournament,
+          attributes: ['tournament_id', 'name', 'date'],
+        },
+      ],
     });
 
     if (!ticket) {
@@ -62,12 +73,17 @@ exports.scanQR = async (req, res, next) => {
     await ticket.save();
 
     res.status(200).json({
+      success: true,
       message: 'Check-in successful.',
-      ticket_id: ticket.ticket_id,
-      profile_id: ticket.profile_id,
+      data: {
+        ticket_id: ticket.ticket_id,
+        profile_name: ticket.Profile.name,
+        tournament_name: ticket.Tournament.name,
+      },
     });
   } catch (error) {
     console.error('Scan QR Error:', error);
-    res.status(500).json({ error: 'Internal server error.' });
+    next(error);
   }
 };
+
