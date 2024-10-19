@@ -1,4 +1,5 @@
 // app.js
+
 require('dotenv').config();
 const express = require('express');
 const app = express();
@@ -13,22 +14,35 @@ app.use(helmet()); // Adds security headers
 app.use(morgan('combined')); // Logs HTTP requests
 
 // CORS Configuration
-const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3000'];
-app.use(cors({
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
+  : ['http://localhost:3000'];
+
+const corsOptions = {
   origin: function (origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
     } else {
-      callback(new Error('Not allowed by CORS'));
+      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+      return callback(new Error(msg), false);
     }
   },
   credentials: true,
-}));
+};
+
+app.use(cors(corsOptions));
 
 app.use(express.json());
 
 // Static Files
 app.use('/uploads/avatars', express.static(path.join(__dirname, 'uploads/avatars')));
+
+// Define a Root Route (Optional but recommended)
+app.get('/', (req, res) => {
+  res.send('Welcome to the Tournament App API');
+});
 
 // Routes
 const authRoutes = require('./routes/authRoutes');
