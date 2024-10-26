@@ -33,6 +33,11 @@ Profile.init(
       type: DataTypes.TEXT,
       allowNull: true,
     },
+    category: {
+      type: DataTypes.ENUM('Youth', 'Teen Male', 'Teen Female', 'Adult Male', 'Adult Female'),
+      allowNull: false,
+      defaultValue: 'Adult Male',
+    },
   },
   {
     sequelize,
@@ -43,7 +48,6 @@ Profile.init(
   }
 );
 
-// Associations
 Profile.belongsTo(User, { foreignKey: 'user_id' });
 User.hasMany(Profile, { foreignKey: 'user_id' });
 

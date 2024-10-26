@@ -2,53 +2,61 @@
 const { Bracket, Tournament, Ticket, Profile } = require('../models');
 const { Op } = require('sequelize');
 
-/**
- * Generate a tournament bracket.
- * This method pairs checked-in participants and creates a bracket.
- */
 exports.generateBracket = async (req, res) => {
   try {
     const tournamentId = req.params.tournamentId;
 
-    // Find tournament
     const tournament = await Tournament.findByPk(tournamentId);
     if (!tournament) {
       return res.status(404).json({ error: 'Tournament not found.' });
     }
 
-    // Get checked-in tickets
     const tickets = await Ticket.findAll({
       where: { tournament_id: tournament.tournament_id, status: 'checked_in' },
-      include: [{ model: Profile, attributes: ['profile_id', 'name'] }],
+      include: [
+        {
+          model: Profile,
+          attributes: ['profile_id', 'name', 'category'],
+        },
+      ],
     });
 
     if (tickets.length < 2) {
-      return res.status(400).json({ error: 'Not enough players to generate a bracket.' });
+      return res.status(400).json({ error: 'Not enough players to generate brackets.' });
     }
 
-    // Extract player profiles
-    const players = tickets.map((ticket) => ticket.Profile);
+    const categories = {};
+    tickets.forEach((ticket) => {
+      const category = ticket.Profile.category;
+      if (!categories[category]) {
+        categories[category] = [];
+      }
+      categories[category].push(ticket.Profile);
+    });
 
-    // Generate bracket data
-    const bracketData = generateBracketData(players);
+    const brackets = {};
+    for (const [category, players] of Object.entries(categories)) {
+      if (players.length < 2) {
+        continue;
+      }
+      const bracketData = generateBracketData(players);
+      brackets[category] = bracketData;
+    }
 
-    // Create or update bracket
     let bracket = await Bracket.findOne({ where: { tournament_id: tournament.tournament_id } });
     if (bracket) {
-      // Update existing bracket
-      bracket.bracket_data = bracketData;
+      bracket.bracket_data = brackets;
       await bracket.save();
     } else {
-      // Create new bracket
       bracket = await Bracket.create({
         tournament_id: tournament.tournament_id,
-        bracket_data: bracketData,
+        bracket_data: brackets,
       });
     }
 
     res.status(201).json({
       bracket_id: bracket.bracket_id,
-      message: 'Bracket generated successfully.',
+      message: 'Brackets generated successfully.',
       bracket_data: bracket.bracket_data,
     });
   } catch (error) {
@@ -56,9 +64,7 @@ exports.generateBracket = async (req, res) => {
     res.status(500).json({ error: 'Internal server error.' });
   }
 };
-/**
- * Get a tournament bracket by ID.
- */
+
 exports.getBracketByTournamentId = async (req, res) => {
   try {
     const tournamentId = req.params.tournamentId;
@@ -75,19 +81,58 @@ exports.getBracketByTournamentId = async (req, res) => {
   }
 };
 
-/**
- * Helper function to generate bracket data.
- */
+exports.updateBracket = async (req, res) => {
+  try {
+    const { bracketId } = req.params;
+    const { bracket_data } = req.body;
+
+    if (!bracket_data || typeof bracket_data !== 'object') {
+      return res.status(400).json({ error: 'Invalid bracket data.' });
+    }
+
+    const bracket = await Bracket.findByPk(bracketId);
+    if (!bracket) {
+      return res.status(404).json({ error: 'Bracket not found.' });
+    }
+
+    bracket.bracket_data = bracket_data;
+    await bracket.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Bracket updated successfully.',
+      data: bracket,
+    });
+  } catch (error) {
+    console.error('Update Bracket Error:', error);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+};
+
+exports.getBracketById = async (req, res) => {
+  try {
+    const { bracketId } = req.params;
+    
+    const bracket = await Bracket.findByPk(bracketId);
+    if (!bracket) {
+      return res.status(404).json({ error: 'Bracket not found.' });
+    }
+
+    res.status(200).json({ success: true, data: bracket });
+  } catch (error) {
+    console.error('Get Bracket Error:', error);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+};
+
 function generateBracketData(players) {
-  // Shuffle players
   const shuffled = players.sort(() => 0.5 - Math.random());
 
-  // Create initial matches
   const matches = [];
   for (let i = 0; i < shuffled.length; i += 2) {
     matches.push({
       player1: shuffled[i],
-      player2: shuffled[i + 1] || null, // Handle odd number of players
+      player2: shuffled[i + 1] || null,
       winner: null,
     });
   }
@@ -101,7 +146,6 @@ function generateBracketData(players) {
     ],
   };
 
-  // Generate subsequent rounds
   let currentMatches = matches;
   let roundNumber = 1;
   while (currentMatches.length > 1) {

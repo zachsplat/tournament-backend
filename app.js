@@ -32,7 +32,16 @@ const corsOptions = {
   credentials: true,
 };
 
-app.use(cors(corsOptions));
+app.use(
+  cors({
+    origin: [
+      'http://localhost:3000',
+      'https://tournament-frontend-beryl.vercel.app',
+    ],
+    credentials: true,
+  })
+);
+
 
 app.use(express.json());
 

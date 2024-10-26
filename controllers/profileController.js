@@ -3,27 +3,31 @@ const { Profile, Ticket } = require('../models');
 const { validationResult } = require('express-validator');
 const path = require('path');
 
-// Create a new profile
+const validCategories = ['Youth', 'Teen Male', 'Teen Female', 'Adult Male', 'Adult Female'];
+
 exports.createProfile = async (req, res) => {
   try {
-    // Validate input
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({ errors: errors.array() });
     }
 
-    // Handle avatar upload
+    const { category } = req.body;
+    if (!validCategories.includes(category)) {
+      return res.status(400).json({ error: 'Invalid category provided.' });
+    }
+
     let avatarUrl = null;
     if (req.file) {
       avatarUrl = `${req.protocol}://${req.get('host')}/uploads/avatars/${req.file.filename}`;
     }
 
-    // Create profile
     const profile = await Profile.create({
       user_id: req.user.user_id,
       name: req.body.name,
       avatar: avatarUrl,
       bio: req.body.bio || null,
+      category,
     });
 
     res.status(201).json({
@@ -40,16 +44,19 @@ exports.createProfile = async (req, res) => {
   }
 };
 
-// Get all profiles for the authenticated user with pagination and filtering
 exports.getUserProfiles = async (req, res, next) => {
   try {
-    const { page = 1, limit = 10, name } = req.query;
+    const { page = 1, limit = 10, name, category } = req.query;
     const offset = (page - 1) * limit;
 
     const where = { user_id: req.user.user_id };
 
     if (name) {
       where.name = { [Op.iLike]: `%${name}%` };
+    }
+    
+    if (category && validCategories.includes(category)) {
+      where.category = category;
     }
 
     const { rows: profiles, count } = await Profile.findAndCountAll({
@@ -74,7 +81,6 @@ exports.getUserProfiles = async (req, res, next) => {
   }
 };
 
-//update profile
 exports.updateProfile = async (req, res) => {
   try {
     const { profileId } = req.params;
@@ -90,15 +96,16 @@ exports.updateProfile = async (req, res) => {
       return res.status(404).json({ error: 'Profile not found.' });
     }
 
-    // Handle avatar upload
     if (req.file) {
       profile.avatar = `${req.protocol}://${req.get('host')}/uploads/avatars/${req.file.filename}`;
     }
 
-    // Update other fields
-    const { name, bio } = req.body;
+    const { name, bio, category } = req.body;
     if (name) profile.name = name;
     if (bio) profile.bio = bio;
+    if (category && validCategories.includes(category)) {
+      profile.category = category;
+    }
 
     await profile.save();
 
@@ -115,12 +122,10 @@ exports.updateProfile = async (req, res) => {
   }
 };
 
-// Delete an existing profile
 exports.deleteProfile = async (req, res, next) => {
   try {
     const { profileId } = req.params;
 
-    // Find profile
     const profile = await Profile.findOne({
       where: { profile_id: profileId, user_id: req.user.user_id },
     });
@@ -129,13 +134,11 @@ exports.deleteProfile = async (req, res, next) => {
       return res.status(404).json({ error: 'Profile not found.' });
     }
 
-    // Check for dependencies (e.g., tickets) before deletion
     const ticketCount = await Ticket.count({ where: { profile_id: profileId } });
     if (ticketCount > 0) {
       return res.status(400).json({ error: 'Cannot delete profile with existing tickets.' });
     }
 
-    // Delete profile
     await profile.destroy();
 
     res.status(200).json({ success: true, message: 'Profile deleted successfully.' });
