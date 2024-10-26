@@ -1,13 +1,8 @@
-// server.js
 const dotenv = require('dotenv');
 const env = process.env.NODE_ENV || 'development';
 
 // Load environment variables based on NODE_ENV
-if (env === 'production') {
-  // In production, Railway automatically provides env variables
-  dotenv.config();
-} else {
-  // In development, load from appropriate .env file
+if (env !== 'production') { // Only load .env files in non-production
   dotenv.config({
     path: `.env.${env}`
   });
@@ -22,7 +17,7 @@ const HOST = '0.0.0.0';
 // Sync database and start server
 async function startServer() {
   try {
-    // In production, we might want to disable auto-sync
+    // In production, you might want to disable auto-sync
     if (process.env.NODE_ENV !== 'production') {
       await sequelize.sync();
       console.log('Database synced successfully');
@@ -39,3 +34,4 @@ async function startServer() {
 }
 
 startServer();
+

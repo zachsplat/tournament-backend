@@ -12,10 +12,10 @@ if (process.env.NODE_ENV === 'production') {
     dialectOptions: {
       ssl: {
         require: true,
-        rejectUnauthorized: false
-      }
+        rejectUnauthorized: false, // Important for SSL connections
+      },
     },
-    logging: false // Disable logging in production
+    logging: false, // Disable logging in production
   });
 } else {
   // Development configuration
@@ -26,7 +26,7 @@ if (process.env.NODE_ENV === 'production') {
     database: process.env.PGDATABASE,
     username: process.env.PGUSER,
     password: process.env.PGPASSWORD,
-    logging: console.log // Enable logging in development
+    logging: console.log, // Enable logging in development
   });
 }
 
@@ -43,3 +43,4 @@ async function testConnection() {
 testConnection();
 
 module.exports = sequelize;
+
