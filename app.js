@@ -1,56 +1,62 @@
 // app.js
-
 require('dotenv').config();
 const express = require('express');
 const app = express();
 const cors = require('cors');
-const { sequelize } = require('./models');
+const sequelize = require('./config/database');
 const path = require('path');
 const helmet = require('helmet');
 const morgan = require('morgan');
 
 // Security Middleware
-app.use(helmet()); // Adds security headers
-app.use(morgan('combined')); // Logs HTTP requests
+app.use(helmet()); 
+app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 
 // CORS Configuration
-const allowedOrigins = process.env.ALLOWED_ORIGINS
-  ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
-  : ['http://localhost:3000'];
+const productionOrigins = [
+  'https://tournament-frontend-beryl.vercel.app'
+  // Add any other production origins here
+];
+
+const developmentOrigins = ['http://localhost:3000'];
 
 const corsOptions = {
   origin: function (origin, callback) {
+    const allowedOrigins = process.env.NODE_ENV === 'production' 
+      ? productionOrigins 
+      : developmentOrigins;
+
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
+    
     if (allowedOrigins.includes(origin)) {
-      return callback(null, true);
+      callback(null, true);
     } else {
-      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
-      return callback(new Error(msg), false);
+      callback(new Error('Not allowed by CORS'));
     }
   },
   credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 };
 
-app.use(
-  cors({
-    origin: [
-      'http://localhost:3000',
-      'https://tournament-frontend-beryl.vercel.app',
-    ],
-    credentials: true,
-  })
-);
+app.use(cors(corsOptions));
 
-
+// Body Parser Middleware
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // Static Files
 app.use('/uploads/avatars', express.static(path.join(__dirname, 'uploads/avatars')));
 
-// Define a Root Route (Optional but recommended)
+// Define a Root Route
 app.get('/', (req, res) => {
   res.send('Welcome to the Tournament App API');
+});
+
+// Health check endpoint (useful for Railway)
+app.get('/health', (req, res) => {
+  res.status(200).send('OK');
 });
 
 // Routes
@@ -71,12 +77,27 @@ app.use('/api/brackets', bracketRoutes);
 app.use('/api/admin/checkin', checkinRoutes);
 app.use('/api/admin/users', adminUserRoutes);
 
+// 404 Handler
+app.use((req, res, next) => {
+  res.status(404).json({ message: 'Route not found' });
+});
+
 // Error Handling Middleware
 const errorHandler = require('./middleware/errorHandler');
 app.use(errorHandler);
 
-// Sync Database
-sequelize.sync();
+// Global Error Handler
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(err.status || 500).json({
+    error: {
+      message: process.env.NODE_ENV === 'production' 
+        ? 'Internal server error' 
+        : err.message,
+      ...(process.env.NODE_ENV !== 'production' && { stack: err.stack })
+    }
+  });
+});
 
+// Export app without calling sequelize.sync()
 module.exports = app;
-
