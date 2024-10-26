@@ -1,5 +1,3 @@
-// app.js
-require('dotenv').config();
 const express = require('express');
 const app = express();
 const cors = require('cors');
@@ -101,3 +99,4 @@ app.use((err, req, res, next) => {
 
 // Export app without calling sequelize.sync()
 module.exports = app;
+
